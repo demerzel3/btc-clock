@@ -5,6 +5,7 @@ import sys
 import asyncio
 import websockets
 import logging
+import aiohttp
 from aiostream import stream, pipe
 from pathlib import Path
 from collections.abc import Mapping
@@ -45,10 +46,6 @@ def handler(signum, frame):
     sys.exit()
 
 
-def show_loading():
-    show_price(0)
-
-
 def draw_number(draw, num: int):
     if num == 0:
         draw.bitmap((29, 0), bitmapDigits[0], fill="white")
@@ -68,29 +65,31 @@ def draw_number(draw, num: int):
         count += 1
 
 
-def show_height():
+def show_height(device, height: int):
     with canvas(device) as draw:
         draw.point((0, 0), fill="white")
-        draw_number(draw, 655286)
+        draw_number(draw, height)
 
 
-def show_price(price):
+def show_price(device, price):
     with canvas(device) as draw:
         draw.point((0, 1), fill="white")
         draw.bitmap((2, 0), bitmapCurrencies['EUR'], fill="white")
         draw_number(draw, int(price))
 
 
-def show_fees():
+def show_fees(device, fees: float):
     with canvas(device) as draw:
         draw.point((0, 2), fill="white")
         draw.bitmap((2, 0), bitmapFees, fill="white")
-        draw_number(draw, 310)
+        draw_number(draw, int(round(fees)))
+
+
+def show_loading(device):
+    show_height(device, 0)
 
 
 signal.signal(signal.SIGINT, handler)
-device = get_device()
-show_loading()
 
 
 async def price_generator():
@@ -119,26 +118,66 @@ async def price_generator():
                     _, details, _, _ = result
                     price = float(details[0][0])
                     print("Price changed! %s" % f'{int(price):,}')
-
-                    if time.monotonic() - last_switch >= 15:
-                        card = (card + 1) % 3
-                        print("Showing card %d" % card)
-                        last_switch = time.monotonic()
-
-                    if card == 0:
-                        show_height()
-                    elif card == 1:
-                        show_price(price)
-                    elif card == 2:
-                        show_fees()
+                    yield price
             except Exception as error:
                 print('Caught this error: ' + repr(error))
-                time.sleep(3)
+                await asyncio.sleep(3)
 
 
-async def hello():
-    last_switch = time.monotonic()
+async def height_generator():
+    async with aiohttp.ClientSession() as session:
+        while True:
+            async with session.get(
+                    'https://blockstream.info/api/blocks/tip/height'
+            ) as response:
+                text = await response.text()
+                print('New height: ' + text)
+                yield int(text)
+
+                await asyncio.sleep(11)
+
+
+async def fees_generator():
+    async with aiohttp.ClientSession() as session:
+        while True:
+            async with session.get(
+                    'https://blockstream.info/api/fee-estimates') as response:
+                text = await response.text()
+                result = json.loads(text)
+                print('New fees: %f' % result['1'])
+                yield result['1']
+
+                await asyncio.sleep(10)
+
+
+async def main():
     card = 0
+    last_switch = time.monotonic()
+    height_stream = stream.iterate(height_generator())
+    price_stream = stream.iterate(price_generator())
+    fees_stream = stream.iterate(fees_generator())
+    zip_stream = stream.ziplatest(height_stream,
+                                  price_stream,
+                                  fees_stream,
+                                  partial=False)
+
+    device = get_device()
+    show_loading(device)
+
+    async with zip_stream.stream() as streamer:
+        async for item in streamer:
+            (height, price, fees) = item
+            if time.monotonic() - last_switch >= 15:
+                card = (card + 1) % 3
+                print("Showing card %d" % card)
+                last_switch = time.monotonic()
+
+            if card == 0:
+                show_height(device, height)
+            elif card == 1:
+                show_price(device, price)
+            elif card == 2:
+                show_fees(device, fees)
 
 
-asyncio.get_event_loop().run_until_complete(hello())
+asyncio.run(main())
