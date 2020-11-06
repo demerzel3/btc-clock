@@ -93,8 +93,7 @@ signal.signal(signal.SIGINT, handler)
 
 
 async def price_generator():
-    uri = "wss://ws.kraken.com"
-    async with websockets.connect(uri) as ws:
+    async with websockets.connect("wss://ws.kraken.com") as ws:
         await ws.send(
             json.dumps({
                 "event": "subscribe",
@@ -110,23 +109,31 @@ async def price_generator():
             }))
 
         while True:
-            try:
-                result = await ws.recv()
-                result = json.loads(result)
+            result = await ws.recv()
+            result = json.loads(result)
 
-                if not isinstance(result, Mapping):
-                    _, details, _, _ = result
-                    price = float(details[0][0])
-                    print("Price changed! %s" % f'{int(price):,}')
-                    yield price
-            except Exception as error:
-                print('Caught this error: ' + repr(error))
-                await asyncio.sleep(3)
+            if not isinstance(result, Mapping):
+                _, details, _, _ = result
+                price = float(details[0][0])
+                print("Price changed! %s" % f'{int(price):,}')
+                yield price
 
 
-async def height_generator():
-    async with aiohttp.ClientSession() as session:
-        while True:
+async def safe_price_generator():
+    while True:
+        try:
+            async for price in price_generator():
+                yield price
+        except GeneratorExit:
+            break
+        except Exception as error:
+            print('ERROR Kraken WS: ' + repr(error))
+            await asyncio.sleep(3)
+
+
+async def height_generator(session):
+    while True:
+        try:
             async with session.get(
                     'https://blockstream.info/api/blocks/tip/height'
             ) as response:
@@ -135,11 +142,16 @@ async def height_generator():
                 yield int(text)
 
                 await asyncio.sleep(11)
+        except GeneratorExit:
+            break
+        except Exception as error:
+            print('ERROR Height: ' + repr(error))
+            await asyncio.sleep(3)
 
 
-async def fees_generator():
-    async with aiohttp.ClientSession() as session:
-        while True:
+async def fees_generator(session):
+    while True:
+        try:
             async with session.get(
                     'https://blockstream.info/api/fee-estimates') as response:
                 text = await response.text()
@@ -148,36 +160,42 @@ async def fees_generator():
                 yield result['1']
 
                 await asyncio.sleep(10)
+        except GeneratorExit:
+            break
+        except Exception as error:
+            print('ERROR Fees: ' + repr(error))
+            await asyncio.sleep(3)
 
 
 async def main():
-    card = 0
-    last_switch = time.monotonic()
-    height_stream = stream.iterate(height_generator())
-    price_stream = stream.iterate(price_generator())
-    fees_stream = stream.iterate(fees_generator())
-    zip_stream = stream.ziplatest(height_stream,
-                                  price_stream,
-                                  fees_stream,
-                                  partial=False)
+    async with aiohttp.ClientSession() as session:
+        card = 0
+        last_switch = time.monotonic()
+        height_stream = stream.iterate(height_generator(session))
+        price_stream = stream.iterate(safe_price_generator())
+        fees_stream = stream.iterate(fees_generator(session))
+        zip_stream = stream.ziplatest(height_stream,
+                                      price_stream,
+                                      fees_stream,
+                                      partial=False)
 
-    device = get_device()
-    show_loading(device)
+        device = get_device()
+        show_loading(device)
 
-    async with zip_stream.stream() as streamer:
-        async for item in streamer:
-            (height, price, fees) = item
-            if time.monotonic() - last_switch >= 15:
-                card = (card + 1) % 3
-                print("Showing card %d" % card)
-                last_switch = time.monotonic()
+        async with zip_stream.stream() as streamer:
+            async for item in streamer:
+                (height, price, fees) = item
+                if time.monotonic() - last_switch >= 15:
+                    card = (card + 1) % 3
+                    print("Showing card %d" % card)
+                    last_switch = time.monotonic()
 
-            if card == 0:
-                show_height(device, height)
-            elif card == 1:
-                show_price(device, price)
-            elif card == 2:
-                show_fees(device, fees)
+                if card == 0:
+                    show_height(device, height)
+                elif card == 1:
+                    show_price(device, price)
+                elif card == 2:
+                    show_fees(device, fees)
 
 
 asyncio.run(main())
