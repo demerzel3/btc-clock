@@ -184,7 +184,9 @@ async def with_previous(gen):
     async for value in gen:
         if prev_value != None:
             yield (prev_value, value)
-        prev_value = value
+        if prev_value != value:
+            prev_value = value
+            yield (value, value)
 
 
 async def main():
