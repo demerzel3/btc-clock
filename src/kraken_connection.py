@@ -173,7 +173,7 @@ def play_new_block(device, height: int):
             with canvas(device) as draw:
                 draw.bitmap((0, 0), frame.convert("1"), fill="white")
                 if index >= 52:
-                    draw_number(draw, height, 29 - (index - 52))
+                    draw_number(draw, height, 28 - (index - 52))
 
     time.sleep(15)
 
