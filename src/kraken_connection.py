@@ -63,28 +63,28 @@ def draw_number(draw, num: int, offset: int = 0):
         count += 1
 
 
-def show_height(device, height: int):
-    with canvas(device) as draw:
-        draw.point((0, 0), fill="white")
-        draw_number(draw, height)
+# def show_height(device, height: int):
+#     with canvas(device) as draw:
+#         draw.point((0, 0), fill="white")
+#         draw_number(draw, height)
 
 
 def show_price(device, price):
     with canvas(device) as draw:
-        draw.point((0, 1), fill="white")
+        draw.point((0, 0), fill="white")
         draw.bitmap((2, 0), bitmapCurrencies['EUR'], fill="white")
         draw_number(draw, int(price))
 
 
 def show_fees(device, fees: float):
     with canvas(device) as draw:
-        draw.point((0, 2), fill="white")
+        draw.point((0, 1), fill="white")
         draw.bitmap((2, 0), bitmapFees, fill="white")
         draw_number(draw, int(round(fees)))
 
 
 def show_loading(device):
-    show_height(device, 0)
+    show_price(device, 0)
 
 
 signal.signal(signal.SIGINT, handler)
@@ -130,6 +130,7 @@ async def safe_price_generator():
 
 
 async def height_generator(session):
+    yield 10000000  # should be safe for some years
     while True:
         try:
             async with session.get(
@@ -175,14 +176,23 @@ def play_new_block(device, height: int):
                 if index >= 52:
                     draw_number(draw, height, 28 - (index - 52))
 
-    time.sleep(15)
+    time.sleep(12)
+
+
+async def with_previous(gen):
+    prev_value = None
+    async for value in gen:
+        if prev_value != None:
+            yield (prev_value, value)
+        prev_value = value
 
 
 async def main():
     async with aiohttp.ClientSession() as session:
         card = 0
         last_switch = time.monotonic()
-        height_stream = stream.iterate(height_generator(session))
+        height_stream = stream.iterate(with_previous(
+            height_generator(session)))
         price_stream = stream.iterate(safe_price_generator())
         fees_stream = stream.iterate(fees_generator(session))
         zip_stream = stream.ziplatest(height_stream,
@@ -195,18 +205,17 @@ async def main():
 
         async with zip_stream.stream() as streamer:
             async for item in streamer:
-                (height, price, fees) = item
+                ((prev_height, cur_height), price, fees) = item
                 if time.monotonic() - last_switch >= 15:
-                    card = (card + 1) % 3
+                    card = (card + 1) % 2
                     print("Showing card %d" % card)
                     last_switch = time.monotonic()
 
-                if card == 0:
-                    # TODO execute this exclusively on block increment
-                    play_new_block(device, height)
-                elif card == 1:
+                if cur_height - prev_height > 0:
+                    play_new_block(device, cur_height)
+                elif card == 0:
                     show_price(device, price)
-                elif card == 2:
+                elif card == 1:
                     show_fees(device, fees)
 
 
