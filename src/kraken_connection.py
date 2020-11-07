@@ -11,7 +11,8 @@ from pathlib import Path
 from collections.abc import Mapping
 from demo_opts import get_device
 from luma.core.render import canvas
-from PIL import ImageFont, Image
+from PIL import Image, ImageSequence
+from luma.core.sprite_system import framerate_regulator
 
 logging.getLogger('websockets.client').setLevel(logging.ERROR)
 logging.getLogger('websockets.server').setLevel(logging.ERROR)
@@ -36,13 +37,10 @@ bitmapDigits = [
 ]
 bitmapDot = Image.open(basePath.joinpath('dot.bmp')).convert("1")
 bitmapFees = Image.open(basePath.joinpath('sats-per-vb.bmp')).convert("1")
-
-font_path = str(basePath.joinpath('fonts', 'smallest_pixel-7.ttf'))
-font = ImageFont.truetype(font_path, 10)
+newBlockAnim = Image.open(basePath.joinpath('new-block.gif'))
 
 
 def handler(signum, frame):
-    # ws.close()
     sys.exit()
 
 
@@ -167,6 +165,14 @@ async def fees_generator(session):
             await asyncio.sleep(3)
 
 
+def play_new_block(device):
+    regulator = framerate_regulator(fps=10)  # 100 ms
+
+    for frame in ImageSequence.Iterator(newBlockAnim):
+        with regulator:
+            device.display(frame.convert(device.mode))
+
+
 async def main():
     async with aiohttp.ClientSession() as session:
         card = 0
@@ -191,6 +197,7 @@ async def main():
                     last_switch = time.monotonic()
 
                 if card == 0:
+                    play_new_block(device)
                     show_height(device, height)
                 elif card == 1:
                     show_price(device, price)
