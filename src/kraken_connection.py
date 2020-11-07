@@ -171,7 +171,7 @@ def play_new_block(device, height: int):
     for index, frame in enumerate(ImageSequence.Iterator(newBlockAnim)):
         with regulator:
             with canvas(device) as draw:
-                draw.bitmap((0, 0), frame.convert("1"))
+                draw.bitmap((0, 0), frame.convert("1"), fill="white")
                 if index >= 52:
                     draw_number(draw, height, 29 - (index - 52))
 
