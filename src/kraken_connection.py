@@ -6,6 +6,9 @@ import asyncio
 import websockets
 import logging
 import aiohttp
+import os
+from dotenv import load_dotenv
+from aiohttp_socks import ProxyConnector
 from aiostream import stream, pipe
 from pathlib import Path
 from collections.abc import Mapping
@@ -13,6 +16,12 @@ from demo_opts import get_device
 from luma.core.render import canvas
 from PIL import Image, ImageSequence
 from luma.core.sprite_system import framerate_regulator
+
+load_dotenv()
+
+NODE_URL = os.getenv("NODE_URL")
+NODE_USERNAME = os.getenv("NODE_USERNAME")
+NODE_PASSWORD = os.getenv("NODE_PASSWORD")
 
 logging.getLogger('websockets.client').setLevel(logging.ERROR)
 logging.getLogger('websockets.server').setLevel(logging.ERROR)
@@ -90,6 +99,12 @@ def show_loading(device):
 signal.signal(signal.SIGINT, handler)
 
 
+def node_rpc(session, method, params=[]):
+    url = 'http://' + NODE_USERNAME + ':' + NODE_PASSWORD + '@' + NODE_URL
+    data = json.dumps({'method': method, 'params': params, 'id': 'jsonrpc'})
+    return session.post(url=url, data=data)
+
+
 async def price_generator():
     async with websockets.connect("wss://ws.kraken.com") as ws:
         await ws.send(
@@ -148,6 +163,22 @@ async def height_generator(session):
             await asyncio.sleep(3)
 
 
+async def node_height_generator(session):
+    while True:
+        try:
+            async with node_rpc(session, 'getblockcount') as response:
+                result = await response.json()
+                print('New height: %d' % int(result['result']))
+                yield int(result['result'])
+
+                await asyncio.sleep(10)
+        except GeneratorExit:
+            break
+        except Exception as error:
+            print('ERROR Height: ' + repr(error))
+            await asyncio.sleep(3)
+
+
 async def fees_generator(session):
     while True:
         try:
@@ -157,6 +188,23 @@ async def fees_generator(session):
                 result = json.loads(text)
                 print('New fees: %f' % result['1'])
                 yield result['1']
+
+                await asyncio.sleep(10)
+        except GeneratorExit:
+            break
+        except Exception as error:
+            print('ERROR Fees: ' + repr(error))
+            await asyncio.sleep(3)
+
+
+async def node_fees_generator(session):
+    while True:
+        try:
+            async with node_rpc(session, 'estimatesmartfee',
+                                [1, 'ECONOMICAL']) as response:
+                result = await response.json()
+                print('New fees: %f' % (result['result']['feerate'] * 100000))
+                yield result['result']['feerate'] * 100000
 
                 await asyncio.sleep(10)
         except GeneratorExit:
@@ -190,13 +238,15 @@ async def with_previous(gen):
 
 
 async def main():
-    async with aiohttp.ClientSession() as session:
+    tor_connector = ProxyConnector.from_url('socks5://localhost:9050')
+
+    async with aiohttp.ClientSession(connector=tor_connector) as tor_session:
         card = 0
         last_switch = time.monotonic()
-        height_stream = stream.iterate(with_previous(
-            height_generator(session)))
+        height_stream = stream.iterate(
+            with_previous(node_height_generator(tor_session)))
         price_stream = stream.iterate(safe_price_generator())
-        fees_stream = stream.iterate(fees_generator(session))
+        fees_stream = stream.iterate(node_fees_generator(tor_session))
         zip_stream = stream.ziplatest(height_stream,
                                       price_stream,
                                       fees_stream,

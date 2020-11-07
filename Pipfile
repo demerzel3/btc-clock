@@ -15,6 +15,8 @@ luma-core = ">=1.17.1"
 websockets = "*"
 aiostream = "*"
 aiohttp = "*"
+aiohttp-socks = "*"
+python-dotenv = "*"
 
 [requires]
 python_version = "3"

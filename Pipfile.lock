@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "16da9bb28acae4fc09ed914c9fe30cd2c947910ca2a19ff0d25f9c4a9f0f2f40"
+            "sha256": "66a387a19d4955d181eedc2e229f9b6a44b392844e81ef7a5dec2d883a66bf36"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -55,6 +55,14 @@
             "index": "pypi",
             "version": "==3.7.2"
         },
+        "aiohttp-socks": {
+            "hashes": [
+                "sha256:2eb2059756bde34c55bb429541cbf2eba3fd53e36ac80875b461221e2858b04a",
+                "sha256:faaa25ed4dc34440ca888d23e089420f3b1918dc4ecf062c3fd9474827ad6a39"
+            ],
+            "index": "pypi",
+            "version": "==0.5.5"
+        },
         "aiostream": {
             "hashes": [
                 "sha256:9055e772f197dc0c1bd3a757edd20b086bc74b257ceb7d690cb3d72b8b70d69a"
@@ -72,11 +80,11 @@
         },
         "attrs": {
             "hashes": [
-                "sha256:26b54ddbbb9ee1d34d5d3668dd37d6cf74990ab23c828c2888dccdceee395594",
-                "sha256:fce7fc47dfc976152e82d53ff92fa0407700c21acd20886a13777a0d20e655dc"
+                "sha256:31b2eced602aa8423c2aea9c76a724617ed67cf9513173fd3a4f03e3a929c7e6",
+                "sha256:832aa3cde19744e49938b91fea06d69ecb9e649c93ba974535d08ad92164f700"
             ],
             "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'",
-            "version": "==20.2.0"
+            "version": "==20.3.0"
         },
         "cbor2": {
             "hashes": [
@@ -109,11 +117,11 @@
         },
         "luma-core": {
             "hashes": [
-                "sha256:ae3d734d493e9e1fb683bf14ebbbe35eae09c16d487c6be319de13c406de3555",
-                "sha256:ba33510d3b722fa6b112e20ee32f363d44c846dd77a2067b727487af88d96435"
+                "sha256:2a7cdbcb18be8b1e754606b6da4a12076f87cfa4ca868574523edfebb563541f",
+                "sha256:a0bc18c03cfb293c9c1b1d8883c2ec7c29d167e4af99f795b5698c8a864332df"
             ],
             "index": "pypi",
-            "version": "==2.0.0"
+            "version": "==2.0.1"
         },
         "luma-emulator": {
             "hashes": [
@@ -133,11 +141,11 @@
         },
         "luma.core": {
             "hashes": [
-                "sha256:ae3d734d493e9e1fb683bf14ebbbe35eae09c16d487c6be319de13c406de3555",
-                "sha256:ba33510d3b722fa6b112e20ee32f363d44c846dd77a2067b727487af88d96435"
+                "sha256:2a7cdbcb18be8b1e754606b6da4a12076f87cfa4ca868574523edfebb563541f",
+                "sha256:a0bc18c03cfb293c9c1b1d8883c2ec7c29d167e4af99f795b5698c8a864332df"
             ],
             "index": "pypi",
-            "version": "==2.0.0"
+            "version": "==2.0.1"
         },
         "multidict": {
             "hashes": [
@@ -272,6 +280,24 @@
                 "sha256:e0770fadba80c31013896c7e6ef703f72e7834965954a78e71a3049488d4d7d8"
             ],
             "version": "==3.4"
+        },
+        "python-dotenv": {
+            "hashes": [
+                "sha256:0c8d1b80d1a1e91717ea7d526178e3882732420b03f08afea0406db6402e220e",
+                "sha256:587825ed60b1711daea4832cf37524dfd404325b7db5e25ebe88c495c9f807a0"
+            ],
+            "index": "pypi",
+            "version": "==0.15.0"
+        },
+        "python-socks": {
+            "extras": [
+                "asyncio"
+            ],
+            "hashes": [
+                "sha256:29cb93787447a239bc1e9c8621c1d8cff9cfebcfc1653685c4fb3a2da74592dc",
+                "sha256:3b4e2aaa0d616b02e432470bdc1106eb734c6640da34e47efdd429693e6daff0"
+            ],
+            "version": "==1.1.0"
         },
         "pyusb": {
             "hashes": [
