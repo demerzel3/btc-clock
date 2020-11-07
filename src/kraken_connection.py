@@ -44,11 +44,11 @@ def handler(signum, frame):
     sys.exit()
 
 
-def draw_number(draw, num: int):
+def draw_number(draw, num: int, offset: int = 0):
     if num == 0:
         draw.bitmap((29, 0), bitmapDigits[0], fill="white")
 
-    x = 32
+    x = 32 + offset
     count = 0
     while num > 0:
         if count == 3:
@@ -122,8 +122,6 @@ async def safe_price_generator():
         try:
             async for price in price_generator():
                 yield price
-        except asyncio.CancelledError:
-            break
         except GeneratorExit:
             break
         except Exception as error:
@@ -142,8 +140,6 @@ async def height_generator(session):
                 yield int(text)
 
                 await asyncio.sleep(11)
-        except asyncio.CancelledError:
-            break
         except GeneratorExit:
             break
         except Exception as error:
@@ -162,8 +158,6 @@ async def fees_generator(session):
                 yield result['1']
 
                 await asyncio.sleep(10)
-        except asyncio.CancelledError:
-            break
         except GeneratorExit:
             break
         except Exception as error:
@@ -171,12 +165,17 @@ async def fees_generator(session):
             await asyncio.sleep(3)
 
 
-def play_new_block(device):
+def play_new_block(device, height: int):
     regulator = framerate_regulator(fps=10)  # 100 ms
 
-    for frame in ImageSequence.Iterator(newBlockAnim):
+    for index, frame in enumerate(ImageSequence.Iterator(newBlockAnim)):
         with regulator:
-            device.display(frame.convert(device.mode))
+            with canvas(device) as draw:
+                draw.bitmap((0, 0), frame.convert("1"))
+                if index >= 52:
+                    draw_number(draw, height, 29 - (index - 52))
+
+    time.sleep(15)
 
 
 async def main():
@@ -203,8 +202,8 @@ async def main():
                     last_switch = time.monotonic()
 
                 if card == 0:
-                    play_new_block(device)
-                    show_height(device, height)
+                    # TODO execute this exclusively on block increment
+                    play_new_block(device, height)
                 elif card == 1:
                     show_price(device, price)
                 elif card == 2:
