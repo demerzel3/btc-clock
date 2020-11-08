@@ -201,7 +201,7 @@ async def node_fees_generator(session):
     while True:
         try:
             async with node_rpc(session, 'estimatesmartfee',
-                                [1, 'ECONOMICAL']) as response:
+                                [1, 'CONSERVATIVE']) as response:
                 result = await response.json()
                 print('New fees: %f' % (result['result']['feerate'] * 100000))
                 yield result['result']['feerate'] * 100000
