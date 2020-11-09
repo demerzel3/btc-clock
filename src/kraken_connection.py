@@ -34,7 +34,8 @@ logging.getLogger('websockets.protocol').setLevel(logging.ERROR)
 basePath = Path(__file__).resolve().parent
 
 bitmapCurrencies = {
-    'EUR': Image.open(basePath.joinpath('euro.bmp')).convert("1")
+    'EUR': Image.open(basePath.joinpath('euro.bmp')).convert("1"),
+    'USD': Image.open(basePath.joinpath('usd.png')).convert("1")
 }
 bitmapDigits = [
     Image.open(basePath.joinpath('digits-0.bmp')).convert("1"),
@@ -84,16 +85,23 @@ def draw_number(draw, num: int, offset: int = 0):
 #         draw_number(draw, height)
 
 
-def show_price(device, price):
+def show_price_eur(device, price):
     with canvas(device) as draw:
         draw.point((0, 0), fill="white")
         draw.bitmap((2, 0), bitmapCurrencies['EUR'], fill="white")
         draw_number(draw, int(price))
 
 
-def show_fees(device, rates: FeeRates):
+def show_price_usd(device, price):
     with canvas(device) as draw:
         draw.point((0, 1), fill="white")
+        draw.bitmap((2, 0), bitmapCurrencies['USD'], fill="white")
+        draw_number(draw, int(price))
+
+
+def show_fees(device, rates: FeeRates):
+    with canvas(device) as draw:
+        draw.point((0, 2), fill="white")
         draw.bitmap((2, 0), bitmapFees, fill="white")
         length = draw_number(draw, int(round(rates.feerate_30min)))
         draw.bitmap((32 - length - 3, 0), bitmapHyphen, fill="white")
@@ -101,7 +109,7 @@ def show_fees(device, rates: FeeRates):
 
 
 def show_loading(device):
-    show_price(device, 0)
+    show_price_eur(device, 0)
 
 
 signal.signal(signal.SIGINT, handler)
@@ -119,7 +127,7 @@ async def price_generator():
             json.dumps({
                 "event": "subscribe",
                 #"event": "ping",
-                "pair": ["XBT/EUR"],
+                "pair": ["XBT/EUR", "XBT/USD"],
                 #"subscription": {"name": "ticker"}
                 #"subscription": {"name": "spread"}
                 "subscription": {
@@ -134,10 +142,15 @@ async def price_generator():
             result = json.loads(result)
 
             if not isinstance(result, Mapping):
-                _, details, _, _ = result
+                print(result)
+                _, details, _, pair = result
                 price = float(details[0][0])
-                print("Price changed! %s" % f'{int(price):,}')
-                yield price
+                if pair == 'XBT/EUR':
+                    print("EUR Price changed! %s" % f'{int(price):,}')
+                    yield ('EUR', price)
+                else:
+                    print("USD Price changed! %s" % f'{int(price):,}')
+                    yield ('USD', price)
 
 
 async def safe_price_generator():
@@ -237,14 +250,12 @@ def play_new_block(device, height: int):
     time.sleep(12)
 
 
-async def with_previous(gen):
+async def when_changed(gen):
     prev_value = None
     async for value in gen:
-        if prev_value != None:
-            yield (prev_value, value)
-        if prev_value != value:
-            prev_value = value
-            yield (value, value)
+        if prev_value != None and prev_value != value:
+            yield value
+        prev_value = value
 
 
 async def main():
@@ -254,32 +265,54 @@ async def main():
         async with aiohttp.ClientSession(
                 connector=tor_connector) as tor_session:
             card = 0
+            price_eur = None
+            price_usd = None
+            fees = None
             last_switch = time.monotonic()
-            height_stream = stream.iterate(
-                with_previous(node_height_generator(tor_session)))
-            price_stream = stream.iterate(safe_price_generator())
-            fees_stream = stream.iterate(fees_generator(session))
-            zip_stream = stream.ziplatest(height_stream,
-                                          price_stream,
-                                          fees_stream,
-                                          partial=False)
+            height_stream = stream.map(
+                stream.iterate(when_changed(
+                    node_height_generator(tor_session))), lambda height:
+                ('height', height))
+            price_stream = stream.map(stream.iterate(safe_price_generator()),
+                                      lambda price: ('price', price))
+            fees_stream = stream.map(stream.iterate(fees_generator(session)),
+                                     lambda fees: ('fees', fees))
+            merge_stream = stream.merge(height_stream, price_stream,
+                                        fees_stream)
 
             device = get_device()
             show_loading(device)
 
-            async with zip_stream.stream() as streamer:
+            async with merge_stream.stream() as streamer:
                 async for item in streamer:
-                    ((prev_height, cur_height), price, fees) = item
+                    (label, value) = item
+                    if label == 'height':
+                        play_new_block(device, value)
+                        continue
+
+                    if label == 'price':
+                        (currency, price) = value
+                        if currency == 'EUR':
+                            price_eur = price
+                        else:
+                            price_usd = price
+                    elif label == 'fees':
+                        fees = value
+
+                    if price_eur == None or price_usd == None or fees == None:
+                        last_switch = time.monotonic()
+                        continue
+
                     if time.monotonic() - last_switch >= 15:
-                        card = (card + 1) % 2
+                        card = (card + 1) % 3
                         print("Showing card %d" % card)
                         last_switch = time.monotonic()
 
-                    if cur_height - prev_height > 0:
-                        play_new_block(device, cur_height)
-                    elif card == 0:
-                        show_price(device, price)
+                    if card == 0:
+                        show_price_eur(device, price_eur)
                     elif card == 1:
+                        show_price_usd(device, price_usd)
+                    elif card == 2:
                         show_fees(device, fees)
 
 
