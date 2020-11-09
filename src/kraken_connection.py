@@ -142,7 +142,6 @@ async def price_generator():
             result = json.loads(result)
 
             if not isinstance(result, Mapping):
-                print(result)
                 _, details, _, pair = result
                 price = float(details[0][0])
                 if pair == 'XBT/EUR':
