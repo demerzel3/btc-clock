@@ -7,6 +7,8 @@ import websockets
 import logging
 import aiohttp
 import os
+import math
+from collections import namedtuple
 from dotenv import load_dotenv
 from aiohttp_socks import ProxyConnector
 from aiostream import stream, pipe
@@ -16,6 +18,8 @@ from demo_opts import get_device
 from luma.core.render import canvas
 from PIL import Image, ImageSequence
 from luma.core.sprite_system import framerate_regulator
+
+FeeRates = namedtuple("FeeRates", "feerate_24h feerate_30min")
 
 load_dotenv()
 
@@ -45,7 +49,8 @@ bitmapDigits = [
     Image.open(basePath.joinpath('digits-9.bmp')).convert("1"),
 ]
 bitmapDot = Image.open(basePath.joinpath('dot.bmp')).convert("1")
-bitmapFees = Image.open(basePath.joinpath('sats-per-vb.bmp')).convert("1")
+bitmapHyphen = Image.open(basePath.joinpath('hyphen.png')).convert("1")
+bitmapFees = Image.open(basePath.joinpath('feerate.png')).convert("1")
 newBlockAnim = Image.open(basePath.joinpath('new-block.gif'))
 
 
@@ -70,6 +75,7 @@ def draw_number(draw, num: int, offset: int = 0):
         draw.bitmap((x - digitWidth, 0), digit, fill="white")
         x -= digitWidth + 1
         count += 1
+    return 32 + offset - x
 
 
 # def show_height(device, height: int):
@@ -85,11 +91,13 @@ def show_price(device, price):
         draw_number(draw, int(price))
 
 
-def show_fees(device, fees: float):
+def show_fees(device, rates: FeeRates):
     with canvas(device) as draw:
         draw.point((0, 1), fill="white")
         draw.bitmap((2, 0), bitmapFees, fill="white")
-        draw_number(draw, int(round(fees)))
+        length = draw_number(draw, int(round(rates.feerate_30min)))
+        draw.bitmap((32 - length - 3, 0), bitmapHyphen, fill="white")
+        draw_number(draw, int(round(rates.feerate_24h)), -length - 4)
 
 
 def show_loading(device):
@@ -183,11 +191,13 @@ async def fees_generator(session):
     while True:
         try:
             async with session.get(
-                    'https://blockstream.info/api/fee-estimates') as response:
+                    'https://whatthefee.io/data.json') as response:
                 text = await response.text()
                 result = json.loads(text)
-                print('New fees: %f' % result['1'])
-                yield result['1']
+                feerate_30min = math.exp(result['data'][0][4] / 100)
+                feerate_24h = math.exp(result['data'][10][4] / 100)
+                print('New fees: %.2f - %.2f' % (feerate_24h, feerate_30min))
+                yield FeeRates(feerate_24h, feerate_30min)
 
                 await asyncio.sleep(10)
         except GeneratorExit:
@@ -240,35 +250,37 @@ async def with_previous(gen):
 async def main():
     tor_connector = ProxyConnector.from_url('socks5://localhost:9050')
 
-    async with aiohttp.ClientSession(connector=tor_connector) as tor_session:
-        card = 0
-        last_switch = time.monotonic()
-        height_stream = stream.iterate(
-            with_previous(node_height_generator(tor_session)))
-        price_stream = stream.iterate(safe_price_generator())
-        fees_stream = stream.iterate(node_fees_generator(tor_session))
-        zip_stream = stream.ziplatest(height_stream,
-                                      price_stream,
-                                      fees_stream,
-                                      partial=False)
+    async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(
+                connector=tor_connector) as tor_session:
+            card = 0
+            last_switch = time.monotonic()
+            height_stream = stream.iterate(
+                with_previous(node_height_generator(tor_session)))
+            price_stream = stream.iterate(safe_price_generator())
+            fees_stream = stream.iterate(fees_generator(session))
+            zip_stream = stream.ziplatest(height_stream,
+                                          price_stream,
+                                          fees_stream,
+                                          partial=False)
 
-        device = get_device()
-        show_loading(device)
+            device = get_device()
+            show_loading(device)
 
-        async with zip_stream.stream() as streamer:
-            async for item in streamer:
-                ((prev_height, cur_height), price, fees) = item
-                if time.monotonic() - last_switch >= 15:
-                    card = (card + 1) % 2
-                    print("Showing card %d" % card)
-                    last_switch = time.monotonic()
+            async with zip_stream.stream() as streamer:
+                async for item in streamer:
+                    ((prev_height, cur_height), price, fees) = item
+                    if time.monotonic() - last_switch >= 15:
+                        card = (card + 1) % 2
+                        print("Showing card %d" % card)
+                        last_switch = time.monotonic()
 
-                if cur_height - prev_height > 0:
-                    play_new_block(device, cur_height)
-                elif card == 0:
-                    show_price(device, price)
-                elif card == 1:
-                    show_fees(device, fees)
+                    if cur_height - prev_height > 0:
+                        play_new_block(device, cur_height)
+                    elif card == 0:
+                        show_price(device, price)
+                    elif card == 1:
+                        show_fees(device, fees)
 
 
 asyncio.run(main())
