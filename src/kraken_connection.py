@@ -333,7 +333,6 @@ def play_new_block_sober(device, height: int):
 async def when_changed(gen):
     prev_value = None
     async for value in gen:
-        yield value
         if prev_value != None and prev_value != value:
             yield value
         prev_value = value
