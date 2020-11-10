@@ -53,6 +53,7 @@ bitmapDot = Image.open(basePath.joinpath('dot.bmp')).convert("1")
 bitmapHyphen = Image.open(basePath.joinpath('hyphen.png')).convert("1")
 bitmapFees = Image.open(basePath.joinpath('feerate.png')).convert("1")
 newBlockAnim = Image.open(basePath.joinpath('new-block.gif'))
+flashyAnim = Image.open(basePath.joinpath('flashy.gif'))
 
 
 def handler(signum, frame):
@@ -249,9 +250,48 @@ def play_new_block(device, height: int):
     time.sleep(12)
 
 
+def ease_in_out_expo(x):
+    if x == 0:
+        return 0
+    if x == 1:
+        return 1
+
+    if x < 0.5:
+        return math.pow(2, 20 * x - 10) / 2
+    else:
+        return (2 - math.pow(2, -20 * x + 10)) / 2
+
+
+def ease_out_expo(x):
+    return 1 if x == 1 else 1 - math.pow(2, -10 * x)
+
+
+def play_new_block_flashy(device, height: int):
+    ANIM_LENGTH = 300  # 300 frames = 5s
+    regulator = framerate_regulator(fps=60)  # 16 ms
+    frames = ImageSequence.Iterator(flashyAnim)
+    cur_height = 0
+    frame = 0
+
+    while cur_height < height:
+        with regulator:
+            with canvas(device) as draw:
+                digits_count = max(1, math.ceil(math.log10(max(1,
+                                                               cur_height))))
+                pixel_size = (digits_count * 3) + (digits_count - 1) + (
+                    3 if digits_count > 3 else 0)
+                print('digits count', digits_count, 'pixel size', pixel_size)
+                draw_number(draw, cur_height, -16 + (pixel_size / 2))
+        frame += 1
+        cur_height = int(round(height * ease_in_out_expo(frame / ANIM_LENGTH)))
+
+    time.sleep(7)
+
+
 async def when_changed(gen):
     prev_value = None
     async for value in gen:
+        yield value
         if prev_value != None and prev_value != value:
             yield value
         prev_value = value
@@ -286,7 +326,7 @@ async def main():
                 async for item in streamer:
                     (label, value) = item
                     if label == 'height':
-                        play_new_block(device, value)
+                        play_new_block_flashy(device, value)
                         continue
 
                     if label == 'price':
