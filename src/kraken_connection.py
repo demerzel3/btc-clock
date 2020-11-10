@@ -300,6 +300,7 @@ def play_new_block_flashy(device, height: int):
 
 def play_new_block_sober(device, height: int):
     regulator = framerate_regulator(fps=10)  # 100 ms
+    slow_regulator = framerate_regulator(fps=5)  # 200 ms
 
     # scroll from below
     for top in range(8, 0, -1):
@@ -308,15 +309,15 @@ def play_new_block_sober(device, height: int):
                 draw.bitmap((0, top), bitmapNewBlockHeader, fill='white')
         top -= 1
 
-    # flash 5 times
-    for frame in range(10):
-        with regulator:
+    # flash 3 times
+    for frame in range(6):
+        with slow_regulator:
             with canvas(device) as draw:
                 if frame % 2 == 0:
                     draw.bitmap((0, 0), bitmapNewBlockHeader, fill='white')
 
     # scroll to left and reveal block height
-    for left in range(0, -32, -1):
+    for left in range(0, -33, -1):
         with regulator:
             with canvas(device) as draw:
                 draw.bitmap((left, 0), bitmapNewBlockHeader, fill='white')
