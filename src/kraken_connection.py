@@ -269,19 +269,27 @@ def ease_out_expo(x):
 def play_new_block_flashy(device, height: int):
     ANIM_LENGTH = 300  # 300 frames = 5s
     regulator = framerate_regulator(fps=60)  # 16 ms
-    frames = ImageSequence.Iterator(flashyAnim)
+    anim_frames = ImageSequence.Iterator(flashyAnim)
     cur_height = 0
     frame = 0
 
     while cur_height < height:
         with regulator:
             with canvas(device) as draw:
+                flashy_frame = math.floor(frame / 6) % 2
+                draw.bitmap((0, 0),
+                            anim_frames[flashy_frame].convert("1"),
+                            fill="white")
+
                 digits_count = max(1, math.ceil(math.log10(max(1,
                                                                cur_height))))
                 pixel_size = (digits_count * 3) + (digits_count - 1) + (
-                    3 if digits_count > 3 else 0)
-                print('digits count', digits_count, 'pixel size', pixel_size)
-                draw_number(draw, cur_height, -16 + (pixel_size / 2))
+                    2 if digits_count > 3 else 0)
+                draw.rectangle([(math.floor(16 - (pixel_size / 2)), 0),
+                                (math.floor(16 + (pixel_size / 2)) + 1, 7)],
+                               fill="black")
+                draw_number(draw, cur_height,
+                            math.ceil(-16 + (pixel_size / 2)))
         frame += 1
         cur_height = int(round(height * ease_in_out_expo(frame / ANIM_LENGTH)))
 
