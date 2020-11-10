@@ -310,7 +310,7 @@ def play_new_block_sober(device, height: int):
         top -= 1
 
     # flash 3 times
-    for frame in range(6):
+    for frame in range(7):
         with slow_regulator:
             with canvas(device) as draw:
                 if frame % 2 == 0:
