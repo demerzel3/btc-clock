@@ -276,7 +276,7 @@ def play_new_block_flashy(device, height: int):
     while cur_height < height:
         with regulator:
             with canvas(device) as draw:
-                flashy_frame = math.floor(frame / 6) % 2
+                flashy_frame = math.floor(frame / 12) % 2
                 draw.bitmap((0, 0),
                             anim_frames[flashy_frame].convert("1"),
                             fill="white")
@@ -299,7 +299,6 @@ def play_new_block_flashy(device, height: int):
 async def when_changed(gen):
     prev_value = None
     async for value in gen:
-        yield value
         if prev_value != None and prev_value != value:
             yield value
         prev_value = value
