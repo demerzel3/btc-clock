@@ -167,25 +167,6 @@ async def safe_price_generator():
             await asyncio.sleep(3)
 
 
-async def height_generator(session):
-    yield 10000000  # should be safe for some years
-    while True:
-        try:
-            async with session.get(
-                    'https://blockstream.info/api/blocks/tip/height'
-            ) as response:
-                text = await response.text()
-                print('New height: ' + text)
-                yield int(text)
-
-                await asyncio.sleep(11)
-        except GeneratorExit:
-            break
-        except Exception as error:
-            print('ERROR Height: ' + repr(error))
-            await asyncio.sleep(3)
-
-
 async def node_height_generator(session):
     while True:
         try:
@@ -237,65 +218,6 @@ async def node_fees_generator(session):
         except Exception as error:
             print('ERROR Fees: ' + repr(error))
             await asyncio.sleep(3)
-
-
-def play_new_block(device, height: int):
-    regulator = framerate_regulator(fps=10)  # 100 ms
-
-    for index, frame in enumerate(ImageSequence.Iterator(newBlockAnim)):
-        with regulator:
-            with canvas(device) as draw:
-                draw.bitmap((0, 0), frame.convert("1"), fill="white")
-                if index >= 52:
-                    draw_number(draw, height, 28 - (index - 52))
-
-    time.sleep(12)
-
-
-def ease_in_out_expo(x):
-    if x == 0:
-        return 0
-    if x == 1:
-        return 1
-
-    if x < 0.5:
-        return math.pow(2, 20 * x - 10) / 2
-    else:
-        return (2 - math.pow(2, -20 * x + 10)) / 2
-
-
-def ease_out_expo(x):
-    return 1 if x == 1 else 1 - math.pow(2, -10 * x)
-
-
-def play_new_block_flashy(device, height: int):
-    ANIM_LENGTH = 300  # 300 frames = 5s
-    regulator = framerate_regulator(fps=60)  # 16 ms
-    anim_frames = ImageSequence.Iterator(flashyAnim)
-    cur_height = 0
-    frame = 0
-
-    while cur_height < height:
-        with regulator:
-            with canvas(device) as draw:
-                flashy_frame = math.floor(frame / 12) % 2
-                draw.bitmap((0, 0),
-                            anim_frames[flashy_frame].convert("1"),
-                            fill="white")
-
-                digits_count = max(1, math.ceil(math.log10(max(1,
-                                                               cur_height))))
-                pixel_size = (digits_count * 3) + (digits_count - 1) + (
-                    2 if digits_count > 3 else 0)
-                draw.rectangle([(math.floor(16 - (pixel_size / 2)), 0),
-                                (math.floor(16 + (pixel_size / 2)) + 1, 7)],
-                               fill="black")
-                draw_number(draw, cur_height,
-                            math.ceil(-16 + (pixel_size / 2)))
-        frame += 1
-        cur_height = int(round(height * ease_in_out_expo(frame / ANIM_LENGTH)))
-
-    time.sleep(7)
 
 
 def play_new_block_sober(device, height: int):
