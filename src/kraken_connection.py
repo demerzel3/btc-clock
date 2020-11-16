@@ -52,7 +52,10 @@ bitmapDigits = [
 bitmapDot = Image.open(basePath.joinpath('dot.bmp')).convert("1")
 bitmapHyphen = Image.open(basePath.joinpath('hyphen.png')).convert("1")
 bitmapFees = Image.open(basePath.joinpath('feerate.png')).convert("1")
+bitmapNewBlockHeader = Image.open(
+    basePath.joinpath('new-block-header.png')).convert("1")
 newBlockAnim = Image.open(basePath.joinpath('new-block.gif'))
+flashyAnim = Image.open(basePath.joinpath('flashy.gif'))
 
 
 def handler(signum, frame):
@@ -164,25 +167,6 @@ async def safe_price_generator():
             await asyncio.sleep(3)
 
 
-async def height_generator(session):
-    yield 10000000  # should be safe for some years
-    while True:
-        try:
-            async with session.get(
-                    'https://blockstream.info/api/blocks/tip/height'
-            ) as response:
-                text = await response.text()
-                print('New height: ' + text)
-                yield int(text)
-
-                await asyncio.sleep(11)
-        except GeneratorExit:
-            break
-        except Exception as error:
-            print('ERROR Height: ' + repr(error))
-            await asyncio.sleep(3)
-
-
 async def node_height_generator(session):
     while True:
         try:
@@ -236,17 +220,36 @@ async def node_fees_generator(session):
             await asyncio.sleep(3)
 
 
-def play_new_block(device, height: int):
+def play_new_block_sober(device, height: int):
     regulator = framerate_regulator(fps=10)  # 100 ms
+    slow_regulator = framerate_regulator(fps=5)  # 200 ms
 
-    for index, frame in enumerate(ImageSequence.Iterator(newBlockAnim)):
+    # scroll from below
+    for top in range(8, 0, -1):
         with regulator:
             with canvas(device) as draw:
-                draw.bitmap((0, 0), frame.convert("1"), fill="white")
-                if index >= 52:
-                    draw_number(draw, height, 28 - (index - 52))
+                draw.bitmap((0, top), bitmapNewBlockHeader, fill='white')
+        top -= 1
 
-    time.sleep(12)
+    # flash 3 times
+    for frame in range(7):
+        with slow_regulator:
+            with canvas(device) as draw:
+                if frame % 2 == 0:
+                    draw.bitmap((0, 0), bitmapNewBlockHeader, fill='white')
+
+    # scroll to left and reveal block height
+    for left in range(0, -33, -1):
+        with regulator:
+            with canvas(device) as draw:
+                draw.bitmap((left, 0), bitmapNewBlockHeader, fill='white')
+                digits_count = max(1, math.ceil(math.log10(max(1, height))))
+                pixel_size = (digits_count * 3) + (digits_count - 1) + (
+                    2 if digits_count > 3 else 0)
+                draw_number(draw, height,
+                            math.ceil(left + 16 + (pixel_size / 2)))
+
+    time.sleep(7)
 
 
 async def when_changed(gen):
@@ -286,7 +289,7 @@ async def main():
                 async for item in streamer:
                     (label, value) = item
                     if label == 'height':
-                        play_new_block(device, value)
+                        play_new_block_sober(device, value)
                         continue
 
                     if label == 'price':
