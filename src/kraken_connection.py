@@ -163,7 +163,9 @@ def show_mempool(device, size: float):
     with canvas(device) as draw:
         draw.point((0, 3), fill="white")
         draw_text(draw, 'M', offset=2)
-        draw_text(draw, float_to_str(size, 3) + 'MB', align=TextAlignment.RIGHT)
+        draw_text(draw,
+                  float_to_str(size, 3) + 'MB',
+                  align=TextAlignment.RIGHT)
 
 
 def show_loading(device):
@@ -338,7 +340,7 @@ async def main():
     async with aiohttp.ClientSession() as session:
         async with aiohttp.ClientSession(
                 connector=tor_connector) as tor_session:
-            card = 3
+            card = 0
             price_eur = None
             price_usd = None
             fees = None
