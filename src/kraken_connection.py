@@ -76,7 +76,7 @@ def float_to_str(num: float, digits: int):
 def measure_text(str: str):
     width = len(str) - 1  # spacing between letters
     for c in str:
-        if c == ' ' or c == ',':
+        if c == ' ':
             width += 1
         else:
             width += bitmaps[c].width
@@ -99,8 +99,6 @@ def draw_text(draw,
         if c == ' ':
             x += 2
         else:
-            if c == ',':
-                x -= 1
             draw.bitmap((x, 0), bitmaps[c], fill="white")
             x += bitmaps[c].width + 1
 
