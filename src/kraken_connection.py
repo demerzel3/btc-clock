@@ -8,6 +8,7 @@ import logging
 import aiohttp
 import os
 import math
+from enum import Enum
 from collections import namedtuple
 from dotenv import load_dotenv
 from aiohttp_socks import ProxyConnector
@@ -33,47 +34,100 @@ logging.getLogger('websockets.protocol').setLevel(logging.ERROR)
 
 basePath = Path(__file__).resolve().parent
 
-bitmapCurrencies = {
-    'EUR': Image.open(basePath.joinpath('euro.bmp')).convert("1"),
-    'USD': Image.open(basePath.joinpath('usd.png')).convert("1")
+bitmaps = {
+    '€': Image.open(basePath.joinpath('euro.bmp')).convert("1"),
+    '$': Image.open(basePath.joinpath('usd.png')).convert("1"),
+    '.': Image.open(basePath.joinpath('dot.bmp')).convert("1"),
+    ',': Image.open(basePath.joinpath('dot.bmp')).convert("1"),  # TODO: comma
+    '-': Image.open(basePath.joinpath('hyphen.png')).convert("1"),
+    '0': Image.open(basePath.joinpath('digits-0.bmp')).convert("1"),
+    '1': Image.open(basePath.joinpath('digits-1.bmp')).convert("1"),
+    '2': Image.open(basePath.joinpath('digits-2.bmp')).convert("1"),
+    '3': Image.open(basePath.joinpath('digits-3.bmp')).convert("1"),
+    '4': Image.open(basePath.joinpath('digits-4.bmp')).convert("1"),
+    '5': Image.open(basePath.joinpath('digits-5.bmp')).convert("1"),
+    '6': Image.open(basePath.joinpath('digits-6.bmp')).convert("1"),
+    '7': Image.open(basePath.joinpath('digits-7.bmp')).convert("1"),
+    '8': Image.open(basePath.joinpath('digits-8.bmp')).convert("1"),
+    '9': Image.open(basePath.joinpath('digits-9.bmp')).convert("1"),
+    'B': Image.open(basePath.joinpath('b.png')).convert("1"),
+    'F': Image.open(basePath.joinpath('f.png')).convert("1"),
+    'M': Image.open(basePath.joinpath('m.png')).convert("1"),
 }
-bitmapDigits = [
-    Image.open(basePath.joinpath('digits-0.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-1.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-2.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-3.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-4.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-5.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-6.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-7.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-8.bmp')).convert("1"),
-    Image.open(basePath.joinpath('digits-9.bmp')).convert("1"),
-]
-bitmapDot = Image.open(basePath.joinpath('dot.bmp')).convert("1")
-bitmapHyphen = Image.open(basePath.joinpath('hyphen.png')).convert("1")
-bitmapFees = Image.open(basePath.joinpath('feerate.png')).convert("1")
+
 bitmapNewBlockHeader = Image.open(
     basePath.joinpath('new-block-header.png')).convert("1")
-newBlockAnim = Image.open(basePath.joinpath('new-block.gif'))
-flashyAnim = Image.open(basePath.joinpath('flashy.gif'))
+
+TextAlignment = Enum('TextAlignment', 'LEFT RIGHT CENTER')
 
 
 def handler(signum, frame):
     sys.exit()
 
 
+def measure_text(str: str):
+    width = len(str) - 1  # spacing between letters
+    for c in str:
+        width += 1 if c == ' ' else bitmaps[c].width
+
+    return width
+
+
+def draw_text(draw,
+              str: str,
+              align: TextAlignment = TextAlignment.LEFT,
+              offset: int = 0):
+    width = measure_text(str)
+    x = offset
+    if align == TextAlignment.RIGHT:
+        x += 32 - width
+    elif align == TextAlignment.CENTER:
+        x += math.ceil((32 - width) / 2)
+
+    for c in str:
+        if c == ' ':
+            x += 2
+        else:
+            draw.bitmap((x, 0), bitmaps[c], fill="white")
+            x += bitmaps[c].width + 1
+
+    return width
+
+
+def draw_int(draw,
+             num: int,
+             align: TextAlignment = TextAlignment.LEFT,
+             offset: int = 0):
+    return draw_text(draw, '{:,}'.format(num), align=align, offset=offset)
+
+
+def float_to_str(num: float, digits: int):
+    digitsBeforeComma = max(1, math.ceil(math.log10(max(1, num))))
+    digitsAfterComma = max(0, digits - digitsBeforeComma)
+    formatString = '{:.' + str(digitsAfterComma) + 'f}'
+
+    return formatString.format(num)
+
+
 def draw_number(draw, num: int, offset: int = 0):
+    return draw_text(draw,
+                     '{:,}'.format(num),
+                     align=TextAlignment.RIGHT,
+                     offset=offset)
+
+
+def draw_number_old(draw, num: int, offset: int = 0):
     if num == 0:
-        draw.bitmap((29, 0), bitmapDigits[0], fill="white")
+        draw.bitmap((29, 0), bitmaps['0'], fill="white")
 
     x = 32 + offset
     count = 0
     while num > 0:
         if count == 3:
             count = 0
-            draw.bitmap((x - 1, 0), bitmapDot, fill="white")
+            draw.bitmap((x - 1, 0), bitmaps['.'], fill="white")
             x -= 2
-        digit = bitmapDigits[num % 10]
+        digit = bitmaps[str(num % 10)]
         (digitWidth, _) = digit.size
         num = num // 10
         draw.bitmap((x - digitWidth, 0), digit, fill="white")
@@ -82,33 +136,34 @@ def draw_number(draw, num: int, offset: int = 0):
     return 32 + offset - x
 
 
-# def show_height(device, height: int):
-#     with canvas(device) as draw:
-#         draw.point((0, 0), fill="white")
-#         draw_number(draw, height)
-
-
 def show_price_eur(device, price):
     with canvas(device) as draw:
         draw.point((0, 0), fill="white")
-        draw.bitmap((2, 0), bitmapCurrencies['EUR'], fill="white")
-        draw_number(draw, int(price))
+        draw_text(draw, '€', offset=2)
+        draw_int(draw, int(price), align=TextAlignment.RIGHT)
 
 
 def show_price_usd(device, price):
     with canvas(device) as draw:
         draw.point((0, 1), fill="white")
-        draw.bitmap((2, 0), bitmapCurrencies['USD'], fill="white")
-        draw_number(draw, int(price))
+        draw_text(draw, '$', offset=2)
+        draw_int(draw, int(price), align=TextAlignment.RIGHT)
 
 
 def show_fees(device, rates: FeeRates):
     with canvas(device) as draw:
+        rates_str = '{:d}-{:d}'.format(round(rates.feerate_24h),
+                                       round(rates.feerate_30min))
         draw.point((0, 2), fill="white")
-        draw.bitmap((2, 0), bitmapFees, fill="white")
-        length = draw_number(draw, int(round(rates.feerate_30min)))
-        draw.bitmap((32 - length - 3, 0), bitmapHyphen, fill="white")
-        draw_number(draw, int(round(rates.feerate_24h)), -length - 4)
+        draw_text(draw, 'F', offset=2)
+        draw_text(draw, rates_str, align=TextAlignment.RIGHT)
+
+
+def show_mempool(device, size: float):
+    with canvas(device) as draw:
+        draw.point((0, 3), fill="white")
+        draw_text(draw, 'M', offset=2)
+        draw_text(draw, float_to_str(size, 3) + 'MB', align=TextAlignment.RIGHT)
 
 
 def show_loading(device):
@@ -220,7 +275,24 @@ async def node_fees_generator(session):
             await asyncio.sleep(3)
 
 
-def play_new_block_sober(device, height: int):
+async def node_mempool_generator(session):
+    while True:
+        try:
+            async with node_rpc(session, 'getmempoolinfo') as response:
+                result = await response.json()
+                print('New mempool size: %.2f MB' %
+                      (result['result']['bytes'] / 1000000))
+                yield result['result']['bytes'] / 1000000
+
+                await asyncio.sleep(10.5)
+        except GeneratorExit:
+            break
+        except Exception as error:
+            print('ERROR Mempool: ' + repr(error))
+            await asyncio.sleep(3)
+
+
+def play_new_block(device, height: int):
     regulator = framerate_regulator(fps=10)  # 100 ms
     slow_regulator = framerate_regulator(fps=5)  # 200 ms
 
@@ -266,10 +338,11 @@ async def main():
     async with aiohttp.ClientSession() as session:
         async with aiohttp.ClientSession(
                 connector=tor_connector) as tor_session:
-            card = 0
+            card = 3
             price_eur = None
             price_usd = None
             fees = None
+            mempool_size = None
             last_switch = time.monotonic()
             height_stream = stream.map(
                 stream.iterate(when_changed(
@@ -279,8 +352,15 @@ async def main():
                                       lambda price: ('price', price))
             fees_stream = stream.map(stream.iterate(fees_generator(session)),
                                      lambda fees: ('fees', fees))
-            merge_stream = stream.merge(height_stream, price_stream,
-                                        fees_stream)
+            mempool_stream = stream.map(
+                stream.iterate(node_mempool_generator(tor_session)),
+                lambda mempool: ('mempool', mempool))
+            merge_stream = stream.merge(
+                height_stream,
+                price_stream,
+                fees_stream,
+                mempool_stream,
+            )
 
             device = get_device()
             show_loading(device)
@@ -289,7 +369,7 @@ async def main():
                 async for item in streamer:
                     (label, value) = item
                     if label == 'height':
-                        play_new_block_sober(device, value)
+                        play_new_block(device, value)
                         continue
 
                     if label == 'price':
@@ -300,13 +380,15 @@ async def main():
                             price_usd = price
                     elif label == 'fees':
                         fees = value
+                    elif label == 'mempool':
+                        mempool_size = value
 
-                    if price_eur == None or price_usd == None or fees == None:
+                    if price_eur == None or price_usd == None or fees == None or mempool_size == None:
                         last_switch = time.monotonic()
                         continue
 
                     if time.monotonic() - last_switch >= 15:
-                        card = (card + 1) % 3
+                        card = (card + 1) % 4
                         print("Showing card %d" % card)
                         last_switch = time.monotonic()
 
@@ -316,6 +398,8 @@ async def main():
                         show_price_usd(device, price_usd)
                     elif card == 2:
                         show_fees(device, fees)
+                    elif card == 3:
+                        show_mempool(device, mempool_size)
 
 
 asyncio.run(main())
