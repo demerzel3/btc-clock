@@ -38,7 +38,7 @@ bitmaps = {
     '€': Image.open(basePath.joinpath('euro.bmp')).convert("1"),
     '$': Image.open(basePath.joinpath('usd.png')).convert("1"),
     '.': Image.open(basePath.joinpath('dot.bmp')).convert("1"),
-    ',': Image.open(basePath.joinpath('dot.bmp')).convert("1"),  # TODO: comma
+    ',': Image.open(basePath.joinpath('comma.png')).convert("1"),
     '-': Image.open(basePath.joinpath('hyphen.png')).convert("1"),
     '0': Image.open(basePath.joinpath('digits-0.bmp')).convert("1"),
     '1': Image.open(basePath.joinpath('digits-1.bmp')).convert("1"),
@@ -65,10 +65,21 @@ def handler(signum, frame):
     sys.exit()
 
 
+def float_to_str(num: float, digits: int):
+    digitsBeforeComma = max(1, math.ceil(math.log10(max(1, num))))
+    digitsAfterComma = max(0, digits - digitsBeforeComma)
+    formatString = '{:.' + str(digitsAfterComma) + 'f}'
+
+    return formatString.format(num)
+
+
 def measure_text(str: str):
     width = len(str) - 1  # spacing between letters
     for c in str:
-        width += 1 if c == ' ' else bitmaps[c].width
+        if c == ' ' or c == ',':
+            width += 1
+        else:
+            width += bitmaps[c].width
 
     return width
 
@@ -88,6 +99,8 @@ def draw_text(draw,
         if c == ' ':
             x += 2
         else:
+            if c == ',':
+                x -= 1
             draw.bitmap((x, 0), bitmaps[c], fill="white")
             x += bitmaps[c].width + 1
 
@@ -101,39 +114,11 @@ def draw_int(draw,
     return draw_text(draw, '{:,}'.format(num), align=align, offset=offset)
 
 
-def float_to_str(num: float, digits: int):
-    digitsBeforeComma = max(1, math.ceil(math.log10(max(1, num))))
-    digitsAfterComma = max(0, digits - digitsBeforeComma)
-    formatString = '{:.' + str(digitsAfterComma) + 'f}'
-
-    return formatString.format(num)
-
-
 def draw_number(draw, num: int, offset: int = 0):
     return draw_text(draw,
                      '{:,}'.format(num),
                      align=TextAlignment.RIGHT,
                      offset=offset)
-
-
-def draw_number_old(draw, num: int, offset: int = 0):
-    if num == 0:
-        draw.bitmap((29, 0), bitmaps['0'], fill="white")
-
-    x = 32 + offset
-    count = 0
-    while num > 0:
-        if count == 3:
-            count = 0
-            draw.bitmap((x - 1, 0), bitmaps['.'], fill="white")
-            x -= 2
-        digit = bitmaps[str(num % 10)]
-        (digitWidth, _) = digit.size
-        num = num // 10
-        draw.bitmap((x - digitWidth, 0), digit, fill="white")
-        x -= digitWidth + 1
-        count += 1
-    return 32 + offset - x
 
 
 def show_price_eur(device, price):
@@ -163,9 +148,7 @@ def show_mempool(device, size: float):
     with canvas(device) as draw:
         draw.point((0, 3), fill="white")
         draw_text(draw, 'M', offset=2)
-        draw_text(draw,
-                  float_to_str(size, 3) + 'MB',
-                  align=TextAlignment.RIGHT)
+        draw_text(draw, float_to_str(size, 4), align=TextAlignment.RIGHT)
 
 
 def show_loading(device):
